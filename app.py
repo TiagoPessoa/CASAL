@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Inicialização da Conexão com Supabase
+# 2. Conexão com Supabase
 @st.cache_resource
 def init_supabase():
     url = st.secrets.get("SUPABASE_URL", "")
@@ -28,7 +28,7 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# 3. Estilização CSS Personalizada
+# 3. Estilização CSS
 st.markdown("""
 <style>
     .metric-card {
@@ -73,7 +73,7 @@ def get_category(item_name):
             return v
     return '📦 Diversos'
 
-# 4. Leitura Unificada do Banco Supabase (com fallback para Excel caso sem conexão)
+# 4. Leitura do Banco Supabase
 @st.cache_data(ttl=5)
 def load_data():
     if supabase:
@@ -144,9 +144,6 @@ df_rec = data_year["receitas"]
 df_desp = data_year["despesas"]
 
 mes_atual_idx = datetime.now().month - 1
-mes_foco = st.sidebar.selectbox("📌 Mês de Foco Inicial", months, index=mes_atual_idx)
-idx_foco = months.index(mes_foco)
-mes_foco_prox = months[(idx_foco + 1) % 12]
 
 with st.sidebar.expander("📱 Atalho no Celular"):
     st.write("• **iPhone:** Compartilhar -> Adicionar à Tela de Início\n• **Android:** Menu 3 Pontos -> Adicionar à Tela Inicial")
@@ -172,70 +169,90 @@ col4.markdown(f'<div class="metric-card"><div class="metric-title">⚖️ Renda 
 
 st.write("")
 
-# Caixa de Alerta de Saúde Financeira
-rec_foco_val, desp_foco_val = rec_totais[mes_foco], desp_totais[mes_foco]
-pct_foco = (desp_foco_val / rec_foco_val * 100) if rec_foco_val > 0 else 0
-
-if rec_foco_val > 0:
-    if pct_foco > 100:
-        st.markdown(f'<div class="alert-box alert-danger">🚨 **Atenção em {mes_foco}:** As despesas superaram a receita em {pct_foco-100:.1f}%. Deficit de R$ {desp_foco_val - rec_foco_val:,.2f}.</div>'.replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
-    elif pct_foco > 80:
-        st.markdown(f'<div class="alert-box alert-warning">⚠️ **Alerta em {mes_foco}:** {pct_foco:.1f}% da renda comprometida. Sobra prevista: R$ {rec_foco_val - desp_foco_val:,.2f}.</div>'.replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="alert-box alert-success">✅ **Saúde Financeira Boa em {mes_foco}:** Apenas {pct_foco:.1f}% da renda comprometida. Sobra prevista: R$ {rec_foco_val - desp_foco_val:,.2f}!</div>'.replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
-
-st.divider()
-
 # Abas da Aplicação
 tab_foco, tab_grupo, tab_add, tab_editar, tab_geral, tab_completa = st.tabs([
     "📌 Mês Atual & Próximo", "🏷️ Categorias & Metas", "➕ Novo Lançamento", "✏️ Editar Planilha", "📈 Visão Geral Anual", "📑 Tabela Completa 12M"
 ])
 
-# ---------------- ABA 1 ----------------
+# ----------------- ABA 1: SELEÇÃO DIRETA DE MESES -----------------
 with tab_foco:
-    st.subheader(f"🔍 Comparativo Prático: {mes_foco} vs. {mes_foco_prox}")
+    st.subheader("🔍 Seleção e Comparativo de Meses")
+    
+    # Caixas de seleção diretamente na aba
+    col_sel_m1, col_sel_m2 = st.columns(2)
+    with col_sel_m1:
+        mes_foco_1 = st.selectbox("Selecione o 1º Mês:", months, index=mes_atual_idx, key="sel_m1_tab")
+    with col_sel_m2:
+        mes_foco_2 = st.selectbox("Selecione o 2º Mês:", months, index=(mes_atual_idx + 1) % 12, key="sel_m2_tab")
+    
+    st.divider()
+    
     c_m1, c_m2 = st.columns(2)
+    
+    rec_m1 = rec_totais[mes_foco_1]
+    desp_m1 = desp_totais[mes_foco_1]
+    saldo_m1 = rec_m1 - desp_m1
+    
+    rec_m2 = rec_totais[mes_foco_2]
+    desp_m2 = desp_totais[mes_foco_2]
+    saldo_m2 = rec_m2 - desp_m2
+    
     with c_m1:
-        st.markdown(f"### 🗓️ {mes_foco}")
-        st.write(f"🟢 **Receitas:** R$ {rec_foco_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.write(f"🔴 **Despesas:** R$ {desp_foco_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.write(f"🔵 **Saldo:** R$ {rec_foco_val - desp_foco_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.markdown(f"### 🗓️ {mes_foco_1}")
+        st.write(f"🟢 **Receitas:** R$ {rec_m1:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.write(f"🔴 **Despesas:** R$ {desp_m1:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.write(f"🔵 **Saldo:** R$ {saldo_m1:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        
     with c_m2:
-        st.markdown(f"### 🗓️ {mes_foco_prox}")
-        st.write(f"🟢 **Receitas:** R$ {rec_totais[mes_foco_prox]:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.write(f"🔴 **Despesas:** R$ {desp_totais[mes_foco_prox]:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.write(f"🔵 **Saldo:** R$ {rec_totais[mes_foco_prox] - desp_totais[mes_foco_prox]:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.markdown(f"### 🗓️ {mes_foco_2}")
+        st.write(f"🟢 **Receitas:** R$ {rec_m2:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.write(f"🔴 **Despesas:** R$ {desp_m2:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.write(f"🔵 **Saldo:** R$ {saldo_m2:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
     st.divider()
+    
     col_t1, col_t2 = st.columns(2)
+    
     with col_t1:
         st.markdown("#### 🟢 Receitas")
         if not df_rec.empty:
-            cols_r = ["Item", mes_foco, mes_foco_prox] if all(x in df_rec.columns for x in ["Item", mes_foco, mes_foco_prox]) else df_rec.columns
-            st.dataframe(df_rec[cols_r].style.format({mes_foco: "R$ {:,.2f}", mes_foco_prox: "R$ {:,.2f}"}), use_container_width=True)
+            cols_rec = ["Item", mes_foco_1, mes_foco_2] if all(x in df_rec.columns for x in ["Item", mes_foco_1, mes_foco_2]) else df_rec.columns
+            df_rec_foco = df_rec[cols_rec].copy()
+            df_rec_foco = df_rec_foco[(df_rec_foco[mes_foco_1] > 0) | (df_rec_foco[mes_foco_2] > 0)]
+            st.dataframe(
+                df_rec_foco.style.format({mes_foco_1: "R$ {:,.2f}", mes_foco_2: "R$ {:,.2f}"}),
+                use_container_width=True
+            )
+            
     with col_t2:
         st.markdown("#### 🔴 Despesas")
         if not df_desp.empty:
-            cols_d = ["Item", "Categoria", mes_foco, mes_foco_prox] if all(x in df_desp.columns for x in ["Item", "Categoria", mes_foco, mes_foco_prox]) else df_desp.columns
-            st.dataframe(df_desp[cols_d].style.format({mes_foco: "R$ {:,.2f}", mes_foco_prox: "R$ {:,.2f}"}), use_container_width=True)
+            cols_desp = ["Item", "Categoria", mes_foco_1, mes_foco_2] if all(x in df_desp.columns for x in ["Item", "Categoria", mes_foco_1, mes_foco_2]) else df_desp.columns
+            df_desp_foco = df_desp[cols_desp].copy()
+            df_desp_foco = df_desp_foco[(df_desp_foco[mes_foco_1] > 0) | (df_desp_foco[mes_foco_2] > 0)]
+            st.dataframe(
+                df_desp_foco.style.format({mes_foco_1: "R$ {:,.2f}", mes_foco_2: "R$ {:,.2f}"}),
+                use_container_width=True
+            )
 
-# ---------------- ABA 2 ----------------
+# ----------------- ABA 2: CATEGORIAS -----------------
 with tab_grupo:
-    st.subheader(f"🏷️ Agrupamento de Gastos — {mes_foco}")
+    mes_cat_sel = st.selectbox("Filtrar Categoria pelo Mês:", months, index=mes_atual_idx)
+    st.subheader(f"🏷️ Agrupamento de Gastos — {mes_cat_sel}")
     if not df_desp.empty and "Categoria" in df_desp.columns:
-        df_cat = df_desp.groupby("Categoria")[mes_foco].sum().reset_index()
-        df_cat = df_cat[df_cat[mes_foco] > 0]
+        df_cat = df_desp.groupby("Categoria")[mes_cat_sel].sum().reset_index()
+        df_cat = df_cat[df_cat[mes_cat_sel] > 0]
         c_pie, c_bar = st.columns(2)
         with c_pie:
-            fig_pie = px.pie(df_cat, values=mes_foco, names="Categoria", hole=0.45, title=f"Distribuição em {mes_foco}")
+            fig_pie = px.pie(df_cat, values=mes_cat_sel, names="Categoria", hole=0.45, title=f"Distribuição em {mes_cat_sel}")
             fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
             st.plotly_chart(fig_pie, use_container_width=True)
         with c_bar:
-            fig_bar = px.bar(df_cat, x="Categoria", y=mes_foco, color="Categoria", text_auto='.2f')
+            fig_bar = px.bar(df_cat, x="Categoria", y=mes_cat_sel, color="Categoria", text_auto='.2f')
             fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc", showlegend=False)
             st.plotly_chart(fig_bar, use_container_width=True)
 
-# ---------------- ABA 3: NOVO LANÇAMENTO (GRAVA NO SUPABASE) ----------------
+# ----------------- ABA 3: NOVO LANÇAMENTO -----------------
 with tab_add:
     st.subheader(f"➕ Adicionar Lançamento Rápido em {ano_sel}")
     with st.form("form_novo_lancamento"):
@@ -275,10 +292,8 @@ with tab_add:
                         st.rerun()
                     except Exception as e_db:
                         st.error(f"Erro ao salvar no banco: {e_db}")
-                else:
-                    st.warning("Sem conexão com banco de dados. Os dados só ficarão temporários.")
 
-# ---------------- ABA 4: EDITAR TABELA COMPLETA (SALVA NO SUPABASE) ----------------
+# ----------------- ABA 4: EDITAR TABELA -----------------
 with tab_editar:
     st.subheader(f"✏️ Edição Direta da Planilha ({ano_sel})")
     st.info("💡 Qualquer alteração feita aqui será sincronizada permanentemente com o banco de dados Supabase!")
@@ -322,7 +337,7 @@ with tab_editar:
             except Exception as e_sync:
                 st.error(f"Erro ao sincronizar: {e_sync}")
 
-# ---------------- ABA 5 ----------------
+# ----------------- ABA 5 -----------------
 with tab_geral:
     st.subheader("Evolução Mensal")
     df_chart = pd.DataFrame({"Mês": months, "Receita": rec_totais.values, "Despesa": desp_totais.values})
@@ -330,7 +345,7 @@ with tab_geral:
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
     st.plotly_chart(fig, use_container_width=True)
 
-# ---------------- ABA 6 ----------------
+# ----------------- ABA 6 -----------------
 with tab_completa:
     st.subheader("Receitas (12M)")
     st.dataframe(df_rec, use_container_width=True)
