@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 import os
 
@@ -12,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilização CSS
+# Estilização CSS personalizada
 st.markdown("""
 <style>
     .metric-card {
@@ -38,6 +39,15 @@ st.markdown("""
     .val-red { color: #ef4444; }
     .val-blue { color: #3b82f6; }
     .val-amber { color: #f59e0b; }
+    .alert-box {
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+    .alert-warning { background-color: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fef08a; }
+    .alert-danger { background-color: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; }
+    .alert-success { background-color: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -46,6 +56,37 @@ FILE_PATH = os.path.join(BASE_DIR, 'CASAL.xlsx')
 
 months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+
+# Mapeamento de Categorias de Despesas
+CATEGORY_MAP = {
+    'CAERN': '🏠 Moradia & Contas',
+    'COSERN': '🏠 Moradia & Contas',
+    'INTERNET': '🏠 Moradia & Contas',
+    'IPTV': '🏠 Moradia & Contas',
+    'RASTREADOR CARRO': '🏠 Moradia & Contas',
+    'RASTREADOR MOTO': '🏠 Moradia & Contas',
+    'VIVO TIAGO': '🏠 Moradia & Contas',
+    'VIVO ESTEFANNY': '🏠 Moradia & Contas',
+    'CARRO': '🚗 Veículos & Transporte',
+    'MOTO': '🚗 Veículos & Transporte',
+    'COMBUSTIVEL': '🚗 Veículos & Transporte',
+    'ALIMENTAÇÃO': '🛒 Estilo de Vida & Saúde',
+    'PANOBIANCO': '🛒 Estilo de Vida & Saúde',
+    'WELHUB': '🛒 Estilo de Vida & Saúde',
+    'BOTICARIO': '🛒 Estilo de Vida & Saúde',
+    'RACÃO': '🛒 Estilo de Vida & Saúde',
+    'CARTÃO TIAGO': '💳 Cartões & Empréstimos',
+    'CARTÃO ESTEFANNY': '💳 Cartões & Empréstimos',
+    'EMPRESTIMOS': '💳 Cartões & Empréstimos',
+    'OUTROS': '📦 Diversos'
+}
+
+def get_category(item_name):
+    item_upper = str(item_name).upper().strip()
+    for k, v in CATEGORY_MAP.items():
+        if k in item_upper:
+            return v
+    return '📦 Diversos'
 
 @st.cache_data
 def load_data(file_path):
@@ -90,6 +131,7 @@ def load_data(file_path):
                 
                 entry = {"Item": item_name, **vals}
                 if in_despesas:
+                    entry["Categoria"] = get_category(item_name)
                     despesas.append(entry)
                 else:
                     receitas.append(entry)
@@ -121,6 +163,16 @@ mes_foco = st.sidebar.selectbox("📌 Mês de Foco Inicial", months, index=mes_a
 idx_foco = months.index(mes_foco)
 mes_foco_prox = months[(idx_foco + 1) % 12]
 
+# Dica para salvar no celular
+with st.sidebar.expander("📱 Como salvar no Celular"):
+    st.write("""
+    **No iPhone (Safari):**
+    Clique no botão de *Compartilhar* -> *Adicionar à Tela de Início*.
+    
+    **No Android (Chrome):**
+    Clique nos *três pontinhos* no topo -> *Adicionar à Tela Inicial*.
+    """)
+
 rec_totais = df_rec[months].sum() if not df_rec.empty else pd.Series([0]*12, index=months)
 desp_totais = df_desp[months].sum() if not df_desp.empty else pd.Series([0]*12, index=months)
 saldo_mensal = rec_totais - desp_totais
@@ -128,6 +180,7 @@ saldo_mensal = rec_totais - desp_totais
 tot_rec = rec_totais.sum()
 tot_desp = desp_totais.sum()
 saldo_anual = tot_rec - tot_desp
+pct_comp_ano = (tot_desp / tot_rec * 100) if tot_rec > 0 else 0
 
 st.title(f"📊 Painel de Controle — {ano_sel}")
 
@@ -159,22 +212,38 @@ with col3:
     """.replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
 
 with col4:
+    color_class = "val-green" if pct_comp_ano <= 75 else ("val-amber" if pct_comp_ano <= 90 else "val-red")
     st.markdown(f"""
     <div class="metric-card">
-        <div class="metric-title">📌 Foco Atual</div>
-        <div class="metric-value val-amber">{mes_foco} / {mes_foco_prox}</div>
+        <div class="metric-title">⚖️ Renda Comprometida</div>
+        <div class="metric-value {color_class}">{pct_comp_ano:.1f}%</div>
     </div>
     """, unsafe_allow_html=True)
 
 st.write("")
+
+# Alerta de Saúde Financeira do Mês de Foco
+rec_foco_val = rec_totais[mes_foco]
+desp_foco_val = desp_totais[mes_foco]
+pct_foco = (desp_foco_val / rec_foco_val * 100) if rec_foco_val > 0 else 0
+
+if rec_foco_val > 0:
+    if pct_foco > 100:
+        st.markdown(f'<div class="alert-box alert-danger">🚨 **Atenção em {mes_foco}:** As despesas (R$ {desp_foco_val:,.2f}) superaram a receita em {pct_foco-100:.1f}%. Deficit de R$ {desp_foco_val - rec_foco_val:,.2f}.</div>'.replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
+    elif pct_foco > 80:
+        st.markdown(f'<div class="alert-box alert-warning">⚠️ **Alerta em {mes_foco}:** {pct_foco:.1f}% da renda está comprometida. Sobra prevista: R$ {rec_foco_val - desp_foco_val:,.2f}.</div>'.replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="alert-box alert-success">✅ **Saúde Financeira Boa em {mes_foco}:** Apenas {pct_foco:.1f}% da renda comprometida. Sobra prevista de R$ {rec_foco_val - desp_foco_val:,.2f}!</div>'.replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
+
 st.divider()
 
 # Abas do aplicativo
-tab_foco, tab_add, tab_editar, tab_geral, tab_completa = st.tabs([
+tab_foco, tab_grupo, tab_add, tab_editar, tab_geral, tab_completa = st.tabs([
     "📌 Mês Atual & Próximo", 
+    "🏷️ Categorias & Metas",
     "➕ Novo Lançamento",
     "✏️ Editar Planilha",
-    "📈 Visão Geral", 
+    "📈 Visão Geral Anual", 
     "📑 Tabela Completa 12M"
 ])
 
@@ -221,14 +290,53 @@ with tab_foco:
     with col_t2:
         st.markdown("#### 🔴 Despesas")
         if not df_desp.empty:
-            df_desp_foco = df_desp[["Item", mes_foco, mes_foco_prox]].copy()
+            cols_desp = ["Item", "Categoria", mes_foco, mes_foco_prox] if "Categoria" in df_desp.columns else ["Item", mes_foco, mes_foco_prox]
+            df_desp_foco = df_desp[cols_desp].copy()
             df_desp_foco = df_desp_foco[(df_desp_foco[mes_foco] > 0) | (df_desp_foco[mes_foco_prox] > 0)]
             st.dataframe(
                 df_desp_foco.style.format({mes_foco: "R$ {:,.2f}", mes_foco_prox: "R$ {:,.2f}"}),
                 use_container_width=True
             )
 
-# ----------------- ABA 2: NOVO LANÇAMENTO RÁPIDO -----------------
+# ----------------- ABA 2: GRUPOS & CATEGORIAS -----------------
+with tab_grupo:
+    st.subheader(f"🏷️ Agrupamento de Gastos — {mes_foco}")
+    
+    if not df_desp.empty:
+        df_cat = df_desp.groupby("Categoria")[mes_foco].sum().reset_index()
+        df_cat = df_cat[df_cat[mes_foco] > 0].sort_values(by=mes_foco, ascending=False)
+        
+        c_pie, c_bar = st.columns(2)
+        
+        with c_pie:
+            fig_pie_cat = px.pie(
+                df_cat, values=mes_foco, names="Categoria",
+                hole=0.45,
+                title=f"Distribuição por Categoria em {mes_foco}",
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig_pie_cat.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
+            st.plotly_chart(fig_pie_cat, use_container_width=True)
+            
+        with c_bar:
+            fig_bar_cat = px.bar(
+                df_cat, x="Categoria", y=mes_foco,
+                color="Categoria",
+                title=f"Total de Gastos por Grupo (R$)",
+                text_auto='.2f',
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig_bar_cat.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc", showlegend=False)
+            st.plotly_chart(fig_bar_cat, use_container_width=True)
+            
+        st.divider()
+        st.markdown("#### 🎯 Teto Recomendado de Gastos (Regra 50-30-20)")
+        col_r1, col_r2, col_r3 = st.columns(3)
+        col_r1.metric("Essenciais (Moradia, Contas, Alimentação)", f"R$ {rec_foco_val * 0.50:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), "Meta 50%")
+        col_r2.metric("Estilo de Vida & Lazer", f"R$ {rec_foco_val * 0.30:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), "Meta 30%")
+        col_r3.metric("Reserva & Investimento", f"R$ {rec_foco_val * 0.20:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), "Meta 20%")
+
+# ----------------- ABA 3: NOVO LANÇAMENTO RÁPIDO -----------------
 with tab_add:
     st.subheader(f"➕ Adicionar Lançamento Rápido em {ano_sel}")
     
@@ -260,13 +368,13 @@ with tab_add:
             else:
                 df_alvo = df_desp if "Despesa" in tipo_l else df_rec
                 
-                # Se o item já existir, atualiza/soma o valor do mês
                 if novo_item_nome in df_alvo["Item"].values:
                     idx = df_alvo[df_alvo["Item"] == novo_item_nome].index[0]
                     df_alvo.loc[idx, mes_l] += valor_l
                 else:
-                    # Se for item novo, cria nova linha
                     nova_linha = {"Item": novo_item_nome}
+                    if "Despesa" in tipo_l:
+                        nova_linha["Categoria"] = get_category(novo_item_nome)
                     for m in months:
                         nova_linha[m] = valor_l if m == mes_l else 0.0
                     if "Despesa" in tipo_l:
@@ -278,7 +386,7 @@ with tab_add:
                 st.success(f"Lançamento de R$ {valor_l:.2f} registrado em '{novo_item_nome}' ({mes_l}/{ano_sel})!")
                 st.rerun()
 
-# ----------------- ABA 3: EDITAR VALORES E CATEGORIAS -----------------
+# ----------------- ABA 4: EDITAR VALORES E CATEGORIAS -----------------
 with tab_editar:
     st.subheader(f"✏️ Edição Direta da Planilha ({ano_sel})")
     st.info("💡 Altere qualquer valor nas tabelas abaixo e clique no botão verde no final para salvar.")
@@ -306,7 +414,7 @@ with tab_editar:
         st.success("Tabelas atualizadas com sucesso!")
         st.rerun()
 
-# ----------------- ABA 4: VISÃO GERAL ANUAL -----------------
+# ----------------- ABA 5: VISÃO GERAL ANUAL -----------------
 with tab_geral:
     st.subheader("Evolução Mensal das Finanças")
     
@@ -325,10 +433,11 @@ with tab_geral:
     fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# ----------------- ABA 5: TABELA COMPLETA -----------------
+# ----------------- ABA 6: TABELA COMPLETA -----------------
 with tab_completa:
     st.subheader("Tabela Completa de Receitas (12 Meses)")
     st.dataframe(df_rec.style.format({m: "R$ {:,.2f}" for m in months}), use_container_width=True)
     
     st.subheader("Tabela Completa de Despesas (12 Meses)")
-    st.dataframe(df_desp.style.format({m: "R$ {:,.2f}" for m in months}), use_container_width=True)
+    cols_d_comp = ["Item", "Categoria"] + months if "Categoria" in df_desp.columns else ["Item"] + months
+    st.dataframe(df_desp[cols_d_comp].style.format({m: "R$ {:,.2f}" for m in months}), use_container_width=True)
