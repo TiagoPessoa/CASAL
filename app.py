@@ -44,6 +44,9 @@ st.markdown("""
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE_PATH = os.path.join(BASE_DIR, 'CASAL.xlsx')
 
+months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+
 @st.cache_data
 def load_data(file_path):
     if not os.path.exists(file_path):
@@ -51,9 +54,6 @@ def load_data(file_path):
         st.stop()
         
     xls = pd.ExcelFile(file_path)
-    months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
-              'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-    
     data_by_year = {}
     
     for sheet in xls.sheet_names:
@@ -88,12 +88,11 @@ def load_data(file_path):
                     else:
                         vals[m] = 0.0
                 
-                if any(v > 0 for v in vals.values()):
-                    entry = {"Item": item_name, **vals}
-                    if in_despesas:
-                        despesas.append(entry)
-                    else:
-                        receitas.append(entry)
+                entry = {"Item": item_name, **vals}
+                if in_despesas:
+                    despesas.append(entry)
+                else:
+                    receitas.append(entry)
                         
             data_by_year[sheet] = {
                 "receitas": pd.DataFrame(receitas),
@@ -116,15 +115,8 @@ data_year = data[ano_sel]
 df_rec = data_year["receitas"]
 df_desp = data_year["despesas"]
 
-months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
-          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-
-# Identificar mês atual automaticamente
+# Mês de foco
 mes_atual_idx = datetime.now().month - 1
-mes_atual_nome = months[mes_atual_idx]
-mes_prox_nome = months[(mes_atual_idx + 1) % 12]
-
-# Filtro manual de mês de foco na barra lateral
 mes_foco = st.sidebar.selectbox("📌 Mês de Foco Inicial", months, index=mes_atual_idx)
 idx_foco = months.index(mes_foco)
 mes_foco_prox = months[(idx_foco + 1) % 12]
@@ -178,8 +170,9 @@ st.write("")
 st.divider()
 
 # Abas do aplicativo
-tab_foco, tab_geral, tab_rec, tab_completa = st.tabs([
+tab_foco, tab_editar, tab_geral, tab_rec, tab_completa = st.tabs([
     "📌 Mês Atual & Próximo", 
+    "✏️ Editar Planilha",
     "📈 Visão Geral", 
     "👥 Receitas", 
     "📑 Tabela Completa 12M"
@@ -189,7 +182,6 @@ tab_foco, tab_geral, tab_rec, tab_completa = st.tabs([
 with tab_foco:
     st.subheader(f"🔍 Comparativo Prático: {mes_foco} vs. {mes_foco_prox}")
     
-    # Resumo Rápido dos Dois Meses
     c_m1, c_m2 = st.columns(2)
     
     rec_m1 = rec_totais[mes_foco]
@@ -214,7 +206,6 @@ with tab_foco:
 
     st.divider()
     
-    # Tabelas compactas focadas apenas nos 2 meses
     col_t1, col_t2 = st.columns(2)
     
     with col_t1:
@@ -237,7 +228,36 @@ with tab_foco:
                 use_container_width=True
             )
 
-# ----------------- ABA 2: VISÃO GERAL ANUAL -----------------
+# ----------------- ABA 2: EDITAR VALORES E CATEGORIAS -----------------
+with tab_editar:
+    st.subheader(f"✏️ Edição Direta da Planilha ({ano_sel})")
+    st.info("💡 Você pode alterar os nomes dos itens, mudar valores de qualquer mês ou adicionar novas linhas direto na tabela abaixo!")
+
+    st.markdown("### 🟢 Editar Receitas")
+    df_rec_edit = st.data_editor(
+        df_rec, 
+        num_rows="dynamic",
+        use_container_width=True,
+        key=f"editor_rec_{ano_sel}"
+    )
+
+    st.markdown("### 🔴 Editar Despesas")
+    df_desp_edit = st.data_editor(
+        df_desp, 
+        num_rows="dynamic",
+        use_container_width=True,
+        key=f"editor_desp_{ano_sel}"
+    )
+
+    if st.button("💾 Salvar e Atualizar Painel", type="primary"):
+        # Atualiza o estado da memória
+        data[ano_sel]["receitas"] = df_rec_edit
+        data[ano_sel]["despesas"] = df_desp_edit
+        st.cache_data.clear()
+        st.success("Valores atualizados com sucesso! A página será recarregada...")
+        st.rerun()
+
+# ----------------- ABA 3: VISÃO GERAL ANUAL -----------------
 with tab_geral:
     st.subheader("Evolução Mensal das Finanças")
     
@@ -256,7 +276,7 @@ with tab_geral:
     fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# ----------------- ABA 3: RECEITAS -----------------
+# ----------------- ABA 4: RECEITAS -----------------
 with tab_rec:
     st.subheader("Origem das Receitas")
     if not df_rec.empty:
@@ -266,7 +286,7 @@ with tab_rec:
         fig_rec_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
         st.plotly_chart(fig_rec_bar, use_container_width=True)
 
-# ----------------- ABA 4: TABELA COMPLETA -----------------
+# ----------------- ABA 5: TABELA COMPLETA -----------------
 with tab_completa:
     st.subheader("Tabela Completa de Receitas (12 Meses)")
     st.dataframe(df_rec.style.format({m: "R$ {:,.2f}" for m in months}), use_container_width=True)
