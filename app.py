@@ -170,11 +170,11 @@ st.write("")
 st.divider()
 
 # Abas do aplicativo
-tab_foco, tab_editar, tab_geral, tab_rec, tab_completa = st.tabs([
+tab_foco, tab_add, tab_editar, tab_geral, tab_completa = st.tabs([
     "📌 Mês Atual & Próximo", 
+    "➕ Novo Lançamento",
     "✏️ Editar Planilha",
     "📈 Visão Geral", 
-    "👥 Receitas", 
     "📑 Tabela Completa 12M"
 ])
 
@@ -228,10 +228,60 @@ with tab_foco:
                 use_container_width=True
             )
 
-# ----------------- ABA 2: EDITAR VALORES E CATEGORIAS -----------------
+# ----------------- ABA 2: NOVO LANÇAMENTO RÁPIDO -----------------
+with tab_add:
+    st.subheader(f"➕ Adicionar Lançamento Rápido em {ano_sel}")
+    
+    with st.form("form_novo_lancamento"):
+        tipo_l = st.radio("Tipo de Lançamento:", ["🔴 Despesa", "🟢 Receita"], horizontal=True)
+        
+        target_df = df_desp if "Despesa" in tipo_l else df_rec
+        itens_existentes = list(target_df["Item"].unique()) if not target_df.empty else []
+        
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            item_sel = st.selectbox("Selecione o Item / Categoria Existente:", ["-- Criar Novo Item --"] + itens_existentes)
+            if item_sel == "-- Criar Novo Item --":
+                novo_item_nome = st.text_input("Nome do Novo Item:", placeholder="Ex: Farmácia, Cinema")
+            else:
+                novo_item_nome = item_sel
+                
+        with col_f2:
+            mes_l = st.selectbox("Mês do Valor:", months, index=mes_atual_idx)
+            valor_l = st.number_input("Valor (R$):", min_value=0.0, step=10.0, format="%.2f")
+            
+        btn_salvar_l = st.form_submit_button("💾 Salvar Lançamento", type="primary")
+        
+        if btn_salvar_l:
+            if not novo_item_nome or novo_item_nome == "-- Criar Novo Item --":
+                st.error("Por favor, digite ou selecione um nome de item válido!")
+            elif valor_l <= 0:
+                st.error("Digite um valor maior que R$ 0,00!")
+            else:
+                df_alvo = df_desp if "Despesa" in tipo_l else df_rec
+                
+                # Se o item já existir, atualiza/soma o valor do mês
+                if novo_item_nome in df_alvo["Item"].values:
+                    idx = df_alvo[df_alvo["Item"] == novo_item_nome].index[0]
+                    df_alvo.loc[idx, mes_l] += valor_l
+                else:
+                    # Se for item novo, cria nova linha
+                    nova_linha = {"Item": novo_item_nome}
+                    for m in months:
+                        nova_linha[m] = valor_l if m == mes_l else 0.0
+                    if "Despesa" in tipo_l:
+                        data[ano_sel]["despesas"] = pd.concat([df_desp, pd.DataFrame([nova_linha])], ignore_index=True)
+                    else:
+                        data[ano_sel]["receitas"] = pd.concat([df_rec, pd.DataFrame([nova_linha])], ignore_index=True)
+                        
+                st.cache_data.clear()
+                st.success(f"Lançamento de R$ {valor_l:.2f} registrado em '{novo_item_nome}' ({mes_l}/{ano_sel})!")
+                st.rerun()
+
+# ----------------- ABA 3: EDITAR VALORES E CATEGORIAS -----------------
 with tab_editar:
     st.subheader(f"✏️ Edição Direta da Planilha ({ano_sel})")
-    st.info("💡 Você pode alterar os nomes dos itens, mudar valores de qualquer mês ou adicionar novas linhas direto na tabela abaixo!")
+    st.info("💡 Altere qualquer valor nas tabelas abaixo e clique no botão verde no final para salvar.")
 
     st.markdown("### 🟢 Editar Receitas")
     df_rec_edit = st.data_editor(
@@ -249,15 +299,14 @@ with tab_editar:
         key=f"editor_desp_{ano_sel}"
     )
 
-    if st.button("💾 Salvar e Atualizar Painel", type="primary"):
-        # Atualiza o estado da memória
+    if st.button("💾 Salvar Alterações da Tabela", type="primary"):
         data[ano_sel]["receitas"] = df_rec_edit
         data[ano_sel]["despesas"] = df_desp_edit
         st.cache_data.clear()
-        st.success("Valores atualizados com sucesso! A página será recarregada...")
+        st.success("Tabelas atualizadas com sucesso!")
         st.rerun()
 
-# ----------------- ABA 3: VISÃO GERAL ANUAL -----------------
+# ----------------- ABA 4: VISÃO GERAL ANUAL -----------------
 with tab_geral:
     st.subheader("Evolução Mensal das Finanças")
     
@@ -275,16 +324,6 @@ with tab_geral:
     )
     fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
     st.plotly_chart(fig_bar, use_container_width=True)
-
-# ----------------- ABA 4: RECEITAS -----------------
-with tab_rec:
-    st.subheader("Origem das Receitas")
-    if not df_rec.empty:
-        df_rec_sum = df_rec.copy()
-        df_rec_sum["Total"] = df_rec_sum[months].sum(axis=1)
-        fig_rec_bar = px.bar(df_rec_sum, x="Item", y="Total", color="Item", text_auto='.2f')
-        fig_rec_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
-        st.plotly_chart(fig_rec_bar, use_container_width=True)
 
 # ----------------- ABA 5: TABELA COMPLETA -----------------
 with tab_completa:
