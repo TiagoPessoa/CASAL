@@ -144,6 +144,8 @@ df_rec = data_year["receitas"]
 df_desp = data_year["despesas"]
 
 mes_atual_idx = datetime.now().month - 1
+mes_atual_nome = months[mes_atual_idx]
+mes_prox_nome = months[(mes_atual_idx + 1) % 12]
 
 with st.sidebar.expander("📱 Atalho no Celular"):
     st.write("• **iPhone:** Compartilhar -> Adicionar à Tela de Início\n• **Android:** Menu 3 Pontos -> Adicionar à Tela Inicial")
@@ -174,40 +176,29 @@ tab_foco, tab_grupo, tab_add, tab_editar, tab_geral, tab_completa = st.tabs([
     "📌 Mês Atual & Próximo", "🏷️ Categorias & Metas", "➕ Novo Lançamento", "✏️ Editar Planilha", "📈 Visão Geral Anual", "📑 Tabela Completa 12M"
 ])
 
-# ----------------- ABA 1: SELEÇÃO DIRETA DE MESES -----------------
+# ----------------- ABA 1: MÊS ATUAL & PRÓXIMO (FIXO) -----------------
 with tab_foco:
-    st.subheader("🔍 Seleção e Comparativo de Meses")
-    
-    # Caixas de seleção diretamente na aba
-    col_sel_m1, col_sel_m2 = st.columns(2)
-    with col_sel_m1:
-        mes_foco_1 = st.selectbox("Selecione o 1º Mês:", months, index=mes_atual_idx, key="sel_m1_tab")
-    with col_sel_m2:
-        mes_foco_2 = st.selectbox("Selecione o 2º Mês:", months, index=(mes_atual_idx + 1) % 12, key="sel_m2_tab")
-    
-    st.divider()
+    st.subheader(f"🔍 Comparativo Prático: {mes_atual_nome} vs. {mes_prox_nome}")
     
     c_m1, c_m2 = st.columns(2)
     
-    rec_m1 = rec_totais[mes_foco_1]
-    desp_m1 = desp_totais[mes_foco_1]
-    saldo_m1 = rec_m1 - desp_m1
+    rec_m1 = rec_totais[mes_atual_nome]
+    desp_m1 = desp_totais[mes_atual_nome]
     
-    rec_m2 = rec_totais[mes_foco_2]
-    desp_m2 = desp_totais[mes_foco_2]
-    saldo_m2 = rec_m2 - desp_m2
+    rec_m2 = rec_totais[mes_prox_nome]
+    desp_m2 = desp_totais[mes_prox_nome]
     
     with c_m1:
-        st.markdown(f"### 🗓️ {mes_foco_1}")
+        st.markdown(f"### 🗓️ {mes_atual_nome} (Atual)")
         st.write(f"🟢 **Receitas:** R$ {rec_m1:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         st.write(f"🔴 **Despesas:** R$ {desp_m1:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.write(f"🔵 **Saldo:** R$ {saldo_m1:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.write(f"🔵 **Saldo:** R$ {rec_m1 - desp_m1:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         
     with c_m2:
-        st.markdown(f"### 🗓️ {mes_foco_2}")
+        st.markdown(f"### 🗓️ {mes_prox_nome} (Próximo)")
         st.write(f"🟢 **Receitas:** R$ {rec_m2:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         st.write(f"🔴 **Despesas:** R$ {desp_m2:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.write(f"🔵 **Saldo:** R$ {saldo_m2:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.write(f"🔵 **Saldo:** R$ {rec_m2 - desp_m2:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
     st.divider()
     
@@ -216,41 +207,56 @@ with tab_foco:
     with col_t1:
         st.markdown("#### 🟢 Receitas")
         if not df_rec.empty:
-            cols_rec = ["Item", mes_foco_1, mes_foco_2] if all(x in df_rec.columns for x in ["Item", mes_foco_1, mes_foco_2]) else df_rec.columns
+            cols_rec = ["Item", mes_atual_nome, mes_prox_nome] if all(x in df_rec.columns for x in ["Item", mes_atual_nome, mes_prox_nome]) else df_rec.columns
             df_rec_foco = df_rec[cols_rec].copy()
-            df_rec_foco = df_rec_foco[(df_rec_foco[mes_foco_1] > 0) | (df_rec_foco[mes_foco_2] > 0)]
+            df_rec_foco = df_rec_foco[(df_rec_foco[mes_atual_nome] > 0) | (df_rec_foco[mes_prox_nome] > 0)]
             st.dataframe(
-                df_rec_foco.style.format({mes_foco_1: "R$ {:,.2f}", mes_foco_2: "R$ {:,.2f}"}),
+                df_rec_foco.style.format({mes_atual_nome: "R$ {:,.2f}", mes_prox_nome: "R$ {:,.2f}"}),
                 use_container_width=True
             )
             
     with col_t2:
         st.markdown("#### 🔴 Despesas")
         if not df_desp.empty:
-            cols_desp = ["Item", "Categoria", mes_foco_1, mes_foco_2] if all(x in df_desp.columns for x in ["Item", "Categoria", mes_foco_1, mes_foco_2]) else df_desp.columns
+            cols_desp = ["Item", "Categoria", mes_atual_nome, mes_prox_nome] if all(x in df_desp.columns for x in ["Item", "Categoria", mes_atual_nome, mes_prox_nome]) else df_desp.columns
             df_desp_foco = df_desp[cols_desp].copy()
-            df_desp_foco = df_desp_foco[(df_desp_foco[mes_foco_1] > 0) | (df_desp_foco[mes_foco_2] > 0)]
+            df_desp_foco = df_desp_foco[(df_desp_foco[mes_atual_nome] > 0) | (df_desp_foco[mes_prox_nome] > 0)]
             st.dataframe(
-                df_desp_foco.style.format({mes_foco_1: "R$ {:,.2f}", mes_foco_2: "R$ {:,.2f}"}),
+                df_desp_foco.style.format({mes_atual_nome: "R$ {:,.2f}", mes_prox_nome: "R$ {:,.2f}"}),
                 use_container_width=True
             )
 
-# ----------------- ABA 2: CATEGORIAS -----------------
+# ----------------- ABA 2: CATEGORIAS E METAS (SELEÇÃO DE MÊS) -----------------
 with tab_grupo:
-    mes_cat_sel = st.selectbox("Filtrar Categoria pelo Mês:", months, index=mes_atual_idx)
-    st.subheader(f"🏷️ Agrupamento de Gastos — {mes_cat_sel}")
+    col_cat_header, col_cat_sel = st.columns([2, 1])
+    with col_cat_sel:
+        mes_cat_sel = st.selectbox("📅 Selecione o Mês para Análise:", months, index=mes_atual_idx, key="sel_mes_categorias")
+    with col_cat_header:
+        st.subheader(f"🏷️ Agrupamento de Gastos — {mes_cat_sel}")
+        
+    rec_cat_val = rec_totais[mes_cat_sel]
+    desp_cat_val = desp_totais[mes_cat_sel]
+    
     if not df_desp.empty and "Categoria" in df_desp.columns:
         df_cat = df_desp.groupby("Categoria")[mes_cat_sel].sum().reset_index()
         df_cat = df_cat[df_cat[mes_cat_sel] > 0]
+        
         c_pie, c_bar = st.columns(2)
         with c_pie:
-            fig_pie = px.pie(df_cat, values=mes_cat_sel, names="Categoria", hole=0.45, title=f"Distribuição em {mes_cat_sel}")
+            fig_pie = px.pie(df_cat, values=mes_cat_sel, names="Categoria", hole=0.45, title=f"Distribuição de Gastos ({mes_cat_sel})")
             fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc")
             st.plotly_chart(fig_pie, use_container_width=True)
         with c_bar:
-            fig_bar = px.bar(df_cat, x="Categoria", y=mes_cat_sel, color="Categoria", text_auto='.2f')
+            fig_bar = px.bar(df_cat, x="Categoria", y=mes_cat_sel, color="Categoria", text_auto='.2f', title=f"Total por Categoria (R$)")
             fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc", showlegend=False)
             st.plotly_chart(fig_bar, use_container_width=True)
+            
+        st.divider()
+        st.markdown(f"#### 🎯 Metas e Teto Recomendado para {mes_cat_sel} (Regra 50-30-20)")
+        col_r1, col_r2, col_r3 = st.columns(3)
+        col_r1.metric("Essenciais (Moradia, Contas, Alimentação)", f"R$ {rec_cat_val * 0.50:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), "Meta 50%")
+        col_r2.metric("Estilo de Vida & Lazer", f"R$ {rec_cat_val * 0.30:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), "Meta 30%")
+        col_r3.metric("Reserva & Investimento", f"R$ {rec_cat_val * 0.20:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), "Meta 20%")
 
 # ----------------- ABA 3: NOVO LANÇAMENTO -----------------
 with tab_add:
